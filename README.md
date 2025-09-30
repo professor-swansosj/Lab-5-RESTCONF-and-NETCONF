@@ -88,3 +88,5 @@ Work directly with network device APIs. First, call a Catalyst 8k RESTCONF endpo
 © 2025 Your Name — Classroom use.
 
 # HAPPY CODING!
+
+**Sincerely, Professor Swanson**
