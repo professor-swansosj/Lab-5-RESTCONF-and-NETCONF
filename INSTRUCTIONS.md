@@ -1,201 +1,200 @@
 # Instructions — Lab 5 — RESTCONF vs NETCONF on Catalyst 8k
 
 ## Objectives
-- Read Catalyst 8k API docs and identify valid RESTCONF endpoints.
-- Use Python `requests` to call RESTCONF and retrieve system/platform details.
-- Explain the role of YANG models for device data.
-- Use Python `ncclient` to call NETCONF for the same info.
-- Compare RESTCONF (HTTP/JSON) vs NETCONF (SSH/XML/RPC) outputs.
-- Log clearly and save raw artifacts + a human-readable report.
+- Call at least two RESTCONF endpoints and two NETCONF RPCs on a Catalyst 8k sandbox.
+- Use Python `requests` for RESTCONF and `ncclient` for NETCONF.
+- Parse RESTCONF JSON and NETCONF XML into Python data structures.
+- Extract comparable device facts (e.g., hostname, model, version, interface info).
+- Generate a human-readable report using f-strings, saved to the repo.
+- Log clear, deterministic markers for autograding and troubleshooting.
 
 ## Prerequisites
 - Python 3.11 (via the provided dev container)
 - Accounts: GitHub
-- Devices/Sandboxes: Cisco DevNet Always-On Sandbox: Catalyst 8000v (RESTCONF + NETCONF)
+- Devices/Sandboxes: Cisco DevNet Always-On Catalyst 8000v (RESTCONF + NETCONF)
+- Technical: - Intermediate Python: functions, modules, exceptions, and logging.
+- Basics of HTTP headers and authentication.
+- Familiarity with XML/JSON and their Python libraries.
+- GitHub Classroom workflow (clone, commit, push, PR).
+- Cisco DevNet sandbox credentials and device reachability.
 
 ## Overview
-Work directly with network device APIs. First, call a Catalyst 8k RESTCONF endpoint with Python `requests` to fetch system/platform information (e.g., model/version). Then perform the equivalent query with NETCONF via `ncclient`. Save raw JSON/XML, compare results, and generate a short report. Along the way, note where YANG models shape both interfaces.
+You will query a Catalyst 8k device via both RESTCONF (HTTP/JSON) and NETCONF (SSH/XML). For RESTCONF, use Python `requests` and proper YANG/JSON Accept headers; for NETCONF, use `ncclient` and standard RPCs. Make at least two calls per interface (2+ RESTCONF endpoints and 2+ NETCONF RPCs), parse outputs into Python, then craft a concise f-string report that compares findings (e.g., hostname, platform/model, version, and one interface/oper state). Save raw artifacts under `data/`, log autograder markers to `logs/lab5.log`, and submit a PR.
 
 
-> **Before you begin:** Open the dev container, confirm outbound network access, and note the sandbox hostname/IP plus RESTCONF and NETCONF ports from DevNet. Create `logs/`, `data/raw/`, and `data/reports/` if missing.
+> **Before you begin:** Confirm sandbox host/IP, RESTCONF port (often 443) and NETCONF port (830). Open the dev container, verify `requests`, `ncclient`, and `xmltodict` import successfully. Ensure you can write to `data/` and `logs/`.
 
 
 ## Resources
-- [Cisco DevNet Always-On Sandbox (IOS-XE/C8Kv)](https://developer.cisco.com/site/sandbox/)- [Requests (Python)](https://requests.readthedocs.io/en/latest/)- [ncclient (Python NETCONF)](https://ncclient.readthedocs.io/)- [RESTCONF (concepts)](https://www.rfc-editor.org/rfc/rfc8040)- [NETCONF (concepts)](https://www.rfc-editor.org/rfc/rfc6241)
+- [Cisco DevNet Sandboxes (Catalyst 8k/IOS-XE)](https://developer.cisco.com/site/sandbox/)- [RESTCONF — RFC 8040 (concepts)](https://www.rfc-editor.org/rfc/rfc8040)- [NETCONF — RFC 6241 (concepts)](https://www.rfc-editor.org/rfc/rfc6241)- [Requests (Python)](https://requests.readthedocs.io/en/latest/)- [ncclient (Python)](https://ncclient.readthedocs.io/)- [xmltodict](https://github.com/martinblech/xmltodict)
 ## Deliverables
-- Standardized README with goals, overview, resources, grading, and tips.
-- Stepwise INSTRUCTIONS for RESTCONF + NETCONF + compare; logs + artifacts saved.
+- `src/restconf_queries.py` — performs ≥2 RESTCONF GETs, saves raw JSON, logs markers.
+- `src/netconf_queries.py` — performs ≥2 NETCONF RPCs, saves raw XML, logs markers.
+- `src/report.py` (or integrate into one script) — parses saved artifacts and writes `data/reports/lab5_report.txt` using f-strings.
+- `data/restconf_*.json` and `data/netconf_*.xml` raw outputs.
+- `data/reports/lab5_report.txt` summary comparing key facts.
+- `logs/lab5.log` with all required markers.
+- Pull request open to `main` with all artifacts committed.
 - Grading: **75 points**
 
 Follow these steps in order.
 
-> **Logging Requirement:** Write progress to `logs/*.log` as you complete each step.
+> **Logging Requirement:** Write progress to `logs/lab5.log` as you complete each step.
 
 ## Step 1 — Clone the Repository
-**Goal:** Get your Classroom repo locally.
+**Goal:** Get the starter locally.
 
 **What to do:**  
-Clone and `cd` into the repo. Confirm `src/`, `data/`, and `logs/` exist (create if needed).
+Clone your Classroom repo and `cd` into it. Create `src/`, `data/raw/`, `data/reports/`, and `logs/` if missing.
+Initialize the lab log: `echo 'LAB5_START' >> logs/lab5.log`
 
 
-**You’re done when:**  
-You see the three folders; Git is tracking changes.
+**You're done when:**  
+- Folders exist and `LAB5_START` appears in `logs/lab5.log`.
+
 
 **Log marker to add:**  
 `[LAB5_START]`
 
-## Step 2 — Open a Dev Container
-**Goal:** Use the standardized environment.
+## Step 2 — Open Dev Container
+**Goal:** Standardize the toolchain.
 
 **What to do:**  
-Reopen in container; wait for dependencies. Verify `python --version`. Write a banner to `logs/DEVCONTAINER_STATUS.txt`.
+Reopen in container. Verify imports:
+  - `python -c "import requests, ncclient, xmltodict; print('OK')"`
+Append `[STEP 2] Dev Container Started` and `PKG_OK: requests`, `PKG_OK: ncclient` to the log.
 
 
-**You’re done when:**  
-You log `[STEP 2] Dev Container Started` and `DEVCONTAINER_OK`.
+**You're done when:**  
+- Python 3.11+ confirmed; packages import cleanly.
+- Log includes the markers.
+
 
 **Log marker to add:**  
-`[[STEP 2] Dev Container Started, DEVCONTAINER_OK]`
+`[[STEP 2] Dev Container Started, PKG_OK: requests, PKG_OK: ncclient]`
 
-## Step 3 — Confirm Sandbox Details
-**Goal:** Identify target host/ports and basic reachability.
+## Step 3 — RESTCONF — make ≥2 GET requests
+**Goal:** Retrieve JSON via RESTCONF using correct headers.
 
 **What to do:**  
-From container, ping the sandbox host and note RESTCONF and NETCONF ports from DevNet page.
+In `src/restconf_queries.py`:
+  - Configure base URL (e.g., `https://<host>/restconf/data/`) and basic auth.
+  - Set headers e.g., `{'Accept': 'application/yang-data+json'}`.
+  - Choose ≥2 endpoints (examples to consider: system/hostname, platform, interfaces summary/oper status).
+  - Use `requests.get(..., timeout=10, verify=False)` for sandbox; handle HTTP errors with try/except.
+  - Save each response to `data/restconf_<name>.json`.
+  - Log `CONNECT_OK: RESTCONF` once and `RESTCONF_REQ_OK:<name>` per successful endpoint; on failure, `RESTCONF_REQ_FAIL:<name>`.
+  - Log `RAW_SAVED=restconf_<name>.json` after writing files.
 
 
-**You’re done when:**  
-You log sandbox reachability in `logs/devcontainer_health.log`.
+**You're done when:**  
+- At least two `RESTCONF_REQ_OK:*` appear and raw JSON files exist.
+
 
 **Log marker to add:**  
-`[LAB5_HEALTH_START, DNS_OK, NET_OK, LAB5_HEALTH_END]`
+`[CONNECT_OK: RESTCONF, RESTCONF_REQ_OK, RAW_SAVED]`
 
-## Step 4 — Review API Docs
-**Goal:** Pick the exact RESTCONF endpoint and NETCONF RPC for system/platform info.
+## Step 4 — NETCONF — make ≥2 RPCs
+**Goal:** Retrieve XML via NETCONF with ncclient.
 
 **What to do:**  
-Open vendor docs; record path/RPC and any auth/header requirements.
+In `src/netconf_queries.py`:
+  - Use `manager.connect(host=..., port=830, username=..., password=..., hostkey_verify=False, timeout=10)`.
+  - Log `CONNECT_OK: NETCONF` on successful session.
+  - Issue ≥2 RPCs (e.g., get system/platform info, get interfaces-state). Use appropriate filters.
+  - Save each RPC reply XML to `data/netconf_<name>.xml`.
+  - Log `NETCONF_RPC_OK:<name>` per successful RPC; on failure, `NETCONF_RPC_FAIL:<name>`.
+  - Log `RAW_SAVED=netconf_<name>.xml` after writing files.
 
-**You’re done when:**  
-You log a line stating the chosen endpoint/RPC.
+
+**You're done when:**  
+- At least two `NETCONF_RPC_OK:*` appear and raw XML files exist.
+
 
 **Log marker to add:**  
-`[DOCS_REVIEWED]`
+`[CONNECT_OK: NETCONF, NETCONF_RPC_OK, RAW_SAVED]`
 
-## Step 5 — RESTCONF — system/platform info
-**Goal:** Fetch JSON with Python `requests`.
+## Step 5 — Parse artifacts & build f-string report
+**Goal:** Normalize JSON/XML and print a concise comparison.
 
 **What to do:**  
-Implement `src/restconf_system_info.py` using HTTP Basic Auth and an Accept header for YANG/JSON.
-Save raw to `data/raw/restconf_system.json`.
+In `src/report.py` (or inside one of your scripts):
+  - Load `data/restconf_*.json` with `json`.
+  - Load `data/netconf_*.xml` with `xmltodict` (or `minidom`), convert to Python dicts.
+  - Extract comparable fields: hostname, model/platform, version, and one interface count/oper-state metric.
+  - Log `PARSE_JSON_OK:<name>` and `PARSE_XML_OK:<name>` when extraction succeeds.
+  - Compose an f-string report summarizing both interfaces’ results and any differences.
+  - Save report to `data/reports/lab5_report.txt` and log `REPORT_SAVED=lab5_report.txt`.
 
 
-**You’re done when:**  
-Status shows OK; JSON saved.
+**You're done when:**  
+- `data/reports/lab5_report.txt` exists and includes values from both RESTCONF and NETCONF.
+
 
 **Log marker to add:**  
-`[CONNECT_OK: RESTCONF, CMD=GET system, RAW_SAVED=restconf_system.json, PARSE_JSON_OK]`
+`[PARSE_JSON_OK, PARSE_XML_OK, REPORT_SAVED=lab5_report.txt]`
 
-## Step 6 — NETCONF — same info
-**Goal:** Fetch XML with `ncclient`.
-
-**What to do:**  
-Implement `src/netconf_system_info.py` connecting to NETCONF port; issue the RPC for system/platform info.
-Save raw to `data/raw/netconf_system.xml`.
-
-
-**You’re done when:**  
-Session succeeds; XML saved.
-
-**Log marker to add:**  
-`[CONNECT_OK: NETCONF, RPC=system info, RAW_SAVED=netconf_system.xml, PARSE_XML_OK]`
-
-## Step 7 — Compare outputs
-**Goal:** Verify fields match and note differences.
+## Step 6 — Finalize & Submit
+**Goal:** Ensure logs and artifacts are complete; open PR.
 
 **What to do:**  
-Implement `src/compare_outputs.py` to load both artifacts, extract model/version (and hostname if available),
-print/compare, and append `data/reports/system_report.txt`.
+Review `logs/lab5.log` for all required markers. Append `LAB5_END`.
+Commit and push all changes. Open a pull request targeting `main`.
 
 
-**You’re done when:**  
-Comparison shown; report updated.
+**You're done when:**  
+- PR open; artifacts present and markers complete.
 
-**Log marker to add:**  
-`[COMPARE_OK, REPORT_SAVED=system_report.txt]`
-
-## Step 8 — Commit, push, submit
-**Goal:** Hand in cleanly.
-
-**What to do:**  
-Commit artifacts and logs; push; open a PR to `main`.
-
-**You’re done when:**  
-PR opens and CI is green.
 
 **Log marker to add:**  
 `[LAB5_END]`
 
 
 ## FAQ
-**Q:** RESTCONF returns HTML instead of JSON—why?  
-**A:** Set an Accept header for YANG/JSON (e.g., `application/yang-data+json`) and use the exact RESTCONF path.
+**Q:** RESTCONF returned HTML, not JSON.  
+**A:** Set `Accept: application/yang-data+json` and use the exact RESTCONF path.
 
-**Q:** NETCONF fails with SSH/EOF errors.  
-**A:** Use the NETCONF port (often 830), correct credentials, and `hostkey_verify=False` for the sandbox.
+**Q:** NETCONF keeps failing to connect.  
+**A:** Use port 830, correct credentials, and `hostkey_verify=False` for the sandbox.
 
 **Q:** Do I need YANG files locally?  
-**A:** Not for these read-only queries; you just need the correct endpoint/RPC names that map to YANG.
+**A:** Not for these read-only queries; you just need correct paths/RPCs that align with YANG models.
 
 
 ## 🔧 Troubleshooting & Pro Tips
-**Got HTML from RESTCONF**  
-*Symptom:* Device responded with a web page  
-*Fix:* Add `headers={'Accept': 'application/yang-data+json'}` and verify the exact path against docs.
+**Timeouts**  
+*Symptom:* Long waits or hang on calls.  
+*Fix:* Set `timeout=10` and catch `requests.Timeout` or ncclient timeouts.
 
-**Requests hangs**  
-*Symptom:* No response on RESTCONF  
-*Fix:* Pass `timeout=10` and handle `requests.Timeout`.
+**File paths**  
+*Symptom:* Nothing saved under `data/`.  
+*Fix:* Create directories and use repo-relative paths; check write permissions.
 
-**Messy XML**  
-*Symptom:* NETCONF output hard to read  
-*Fix:* Use `xmltodict` or `xml.dom.minidom` to pretty-print.
-
-**File not found**  
-*Symptom:* Nothing written under `data/`  
-*Fix:* Create directories and use correct relative paths from repo root.
-
-**No points despite success**  
-*Symptom:* Autograder says missing markers  
-*Fix:* Ensure required log lines exactly match the tokens below.
+**Markers missing**  
+*Symptom:* Autograder shows missing tokens.  
+*Fix:* Log exact strings from the Autograder section; don’t improvise marker text.
 
 
 ## Grading Breakdown
 | Step | Requirement | Points |
 |---|---|---|
-| 1 | Repo cloned and structure verified | 5 |
-| 2 | Dev container opened; dependencies OK | 5 |
-| 3 | Sandbox reachable (ping/ports) | 5 |
-| 4 | API docs reviewed; endpoint/RPC chosen | 5 |
-| 5 | RESTCONF script runs, retrieves JSON | 10 |
-| 6 | RESTCONF raw saved + log markers present | 5 |
-| 7 | NETCONF script runs, retrieves XML | 10 |
-| 8 | NETCONF raw saved + log markers present | 5 |
-| 9 | Compare script parses both and matches key fields | 10 |
-| 10 | Final report generated in `data/reports/system_report.txt` | 10 |
-| 10b | All deliverables pushed; logs complete | 5 |
+| Step 2 | Dev container started; packages verified | 5 |
+| RESTCONF | ≥2 RESTCONF endpoints succeed (`RESTCONF_REQ_OK:*`, `CONNECT_OK: RESTCONF`) | 12 |
+| NETCONF | ≥2 NETCONF RPCs succeed (`NETCONF_RPC_OK:*`, `CONNECT_OK: NETCONF`) | 12 |
+| Parsing | JSON and XML parsed; fields extracted (`PARSE_JSON_OK:*`, `PARSE_XML_OK:*`) | 12 |
+| Report | F-string report generated and saved (`REPORT_SAVED=lab5_report.txt`) | 12 |
+| Artifacts | Raw files saved under `data/` with `RAW_SAVED=*` markers | 7 |
+| Error handling & logging | Handled exceptions; consistent logging | 5 |
+| Submission | PR open; `LAB5_START` and `LAB5_END` present | 10 |
 | **Total** |  | **75** |
 
 ## Autograder Notes
-- Log file: `logs/*.log`
-- Required markers: `LAB5_START`, `[STEP 2] Dev Container Started`, `DEVCONTAINER_OK`, `PKG_OK: requests`, `PKG_OK: ncclient`, `CONNECT_OK: RESTCONF`, `CONNECT_OK: NETCONF`, `CMD=GET system`, `RPC=system info`, `RAW_SAVED=restconf_system.json`, `RAW_SAVED=netconf_system.xml`, `PARSE_JSON_OK`, `PARSE_XML_OK`, `COMPARE_OK`, `REPORT_SAVED=system_report.txt`, `LAB5_HEALTH_START`, `DNS_OK`, `NET_OK`, `HEALTH_OVERALL=True`, `LAB5_HEALTH_END`, `LAB5_END`
+- Log file: `logs/lab5.log`
+- Required markers: `LAB5_START`, `[STEP 2] Dev Container Started`, `PKG_OK: requests`, `PKG_OK: ncclient`, `CONNECT_OK: RESTCONF`, `CONNECT_OK: NETCONF`, `RESTCONF_REQ_OK`, `NETCONF_RPC_OK`, `RAW_SAVED`, `PARSE_JSON_OK`, `PARSE_XML_OK`, `REPORT_SAVED=lab5_report.txt`, `LAB5_END`
 
 ## Submission Checklist
-- [ ] All three scripts exist in `src/` and run without tracebacks.
-- [ ] `data/raw/restconf_system.json` and `data/raw/netconf_system.xml` are present and non-empty.
-- [ ] `data/reports/system_report.txt` summarizes hostname, model, and version with method labels.
-- [ ] `logs/restconf_system_info.log` includes RESTCONF CONNECT_OK, CMD=GET, and RAW_SAVED markers.
-- [ ] `logs/netconf_system_info.log` includes NETCONF CONNECT_OK, RPC marker, and RAW_SAVED markers.
-- [ ] `logs/compare_outputs.log` shows PARSE_JSON_OK, PARSE_XML_OK, and COMPARE_OK.
-- [ ] `logs/devcontainer_health.log` shows DNS_OK, NET_OK, HEALTH_OVERALL=True.
-- [ ] `logs/DEVCONTAINER_STATUS.txt` shows Overall status: READY.
+- [ ] `src/restconf_queries.py` and `src/netconf_queries.py` run without unhandled exceptions.
+- [ ] `data/restconf_*.json` and `data/netconf_*.xml` exist and are populated.
+- [ ] `data/reports/lab5_report.txt` compares fields from both interfaces.
+- [ ] `logs/lab5.log` contains all required markers.
+- [ ] Pull request open before deadline.
