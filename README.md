@@ -214,4 +214,4 @@ with manager.connect(host=device_ip, port=netconf_port, username=username, passw
 
 
 ## License
-© 2025 Your Name — Classroom use.
+© 2025 Sheldon Swanson — Classroom use.
